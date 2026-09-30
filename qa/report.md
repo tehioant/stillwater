@@ -13,7 +13,7 @@ Full single-page pond experience: opening composition, enter flow, movement, dra
 - **Mountain orientation and fog:** ridge faces are tangent to the pond and fog uniforms/declarations are complete. Unit and real-browser checks cover integration.
 - **Low-frame-rate navigation:** bounded simulation substeps preserve glide speed without unsafe tab-return jumps.
 - **Touch tap lost during a renderer stall:** a deterministic browser-clock regression reproduced taps expiring before the next frame. Tap lifetime now counts bounded rendered interaction time; the regression and full suite pass.
-- **Browser timing and target coordinates:** tests hold movement until observed displacement instead of fixed short sleeps. Reset waits for a rendered camera projection. Interaction coordinates project the actual bloom/lantern body instead of the stem/root base.
+- **Browser timing and target coordinates:** tests hold movement until observed displacement instead of fixed short sleeps. Reset explicitly waits for a frame after the reset event before reading tap coordinates; merely checking for a visible flower can still return pre-reset coordinates. A browser-clock probe reproduced stale-coordinate taps missing and fresh-coordinate taps succeeding. Interaction coordinates project the actual bloom/lantern body instead of the stem/root base.
 
 ## Final local verification
 

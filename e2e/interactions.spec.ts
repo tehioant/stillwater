@@ -146,7 +146,12 @@ test("touch visitors can glide and tap nearby flowers without page overflow", as
   });
   expect((await snapshot(page)).camera.z).toBeLessThan(start.camera.z - 0.15);
   await page.getByRole("button", { name: "Reset view" }).click();
-  // Reset updates the camera on the next rendered frame; wait for that projection.
+  // A visible flower can still have its pre-reset projection. Require an actual
+  // frame after reset before obtaining tap coordinates, even on a slow renderer.
+  const elapsedAfterReset = (await snapshot(page)).elapsed;
+  await expect
+    .poll(async () => (await snapshot(page)).elapsed)
+    .toBeGreaterThan(elapsedAfterReset);
   await expect
     .poll(
       async () =>
