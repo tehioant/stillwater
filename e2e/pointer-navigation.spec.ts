@@ -41,6 +41,38 @@ test("mouse navigation pauses over controls and does not resume after guide or r
   expect((await snapshot(page)).camera).toEqual(blurred);
 });
 
+test("centre settles without excessive frame waits on a slow renderer", async ({
+  page,
+}) => {
+  // Model the CI software renderer's long frame intervals, without lowering quality.
+  await page.addInitScript(() => {
+    const requestFrame = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (callback) =>
+      requestFrame(() => {
+        window.setTimeout(() => callback(performance.now()), 1000);
+      });
+  });
+  await page.goto("/?test=1");
+  await page.getByRole("button", { name: "Enter the pond" }).click();
+  const size = page.viewportSize()!;
+  await page.mouse.move(size.width / 2, size.height * 0.18);
+  await expect
+    .poll(async () => (await snapshot(page)).camera.z)
+    .toBeLessThan(11.8);
+  expect((await snapshot(page)).navigationSpeed).toBeGreaterThan(0);
+  await page.mouse.move(size.width / 2, size.height / 2);
+  await expect
+    .poll(async () => (await snapshot(page)).navigationSpeed, {
+      timeout: 30000,
+    })
+    .toBeLessThan(0.001);
+  const stopped = (await snapshot(page)).camera;
+  await frames(page, 2);
+  const later = (await snapshot(page)).camera;
+  expect(later.z).toBeCloseTo(stopped.z, 2);
+  expect(later.yaw).toBe(stopped.yaw);
+});
+
 async function frames(page: Page, count = 8) {
   await page.evaluate(
     (count) =>
@@ -83,10 +115,13 @@ test("mouse direction steers and glides without a held button; centre stops", as
     .poll(async () => (await snapshot(page)).camera.z)
     .toBeGreaterThan(12.2);
 
+  expect((await snapshot(page)).navigationSpeed).toBeGreaterThan(0);
   await page.mouse.move(size.width / 2, size.height / 2);
-  await frames(page, 60);
+  await expect
+    .poll(async () => (await snapshot(page)).navigationSpeed)
+    .toBeLessThan(0.001);
   const stopped = (await snapshot(page)).camera;
-  await frames(page, 10);
+  await frames(page, 4);
   const later = (await snapshot(page)).camera;
   expect(later.z).toBeCloseTo(stopped.z, 2);
   expect(later.yaw).toBe(stopped.yaw);

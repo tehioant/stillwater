@@ -452,6 +452,7 @@ async function initialize() {
             pitch: navigation.pitch,
             aspect: camera.aspect,
           },
+          navigationSpeed: Math.hypot(navigation.vx, navigation.vz),
           reducedMotion,
           elapsed,
           entered,
