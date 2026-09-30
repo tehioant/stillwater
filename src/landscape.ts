@@ -1,10 +1,13 @@
 import * as THREE from "three";
 
 const vertexShader = `
+attribute float aCrest;
 varying vec3 vLocal;
+varying float vCrest;
 varying float vFogDepth;
 void main() {
   vLocal = position;
+  vCrest = aCrest;
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   vFogDepth = -mvPosition.z;
   gl_Position = projectionMatrix * mvPosition;
@@ -14,9 +17,13 @@ const fragmentShader = `
 uniform vec3 uInk;
 uniform vec3 uJade;
 uniform vec3 uLight;
-uniform vec3 uGold;
-uniform float uDistance;
+uniform vec3 uContourColor;
+uniform float uContourOpacity;
+uniform float uPhase;
+uniform float uLayer;
+uniform float uWidth;
 varying vec3 vLocal;
+varying float vCrest;
 #include <fog_pars_fragment>
 
 float hash21(vec2 p) {
@@ -25,33 +32,32 @@ float hash21(vec2 p) {
   return fract(p.x * p.y);
 }
 float noise2(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
+  vec2 i = floor(p), f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
-             mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
+    mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 void main() {
-  float grain = noise2(vLocal.xy * 2.7 + vec2(vLocal.z * 0.8, vLocal.y * 0.5));
-  float tooth = noise2(vLocal.xy * 13.0 + vLocal.zy * 4.0);
-  float brush = noise2(vec2(vLocal.x * 0.62 + grain * 1.4, vLocal.y * 1.8));
-  float wash = smoothstep(0.18, 0.88, brush * 0.75 + grain * 0.25);
-  vec3 color = mix(uInk, uJade, wash * 0.78 + 0.08);
-  color = mix(color, uLight, smoothstep(0.54, 0.9, grain) * 0.3);
+  float profile = clamp(vLocal.y / max(vCrest, 0.1), 0.0, 1.0);
+  // Broad ink washes, not mottled rock noise: texture stays subordinate to shape.
+  float wash = 0.5 + 0.5 * sin(vLocal.x * 0.095 + uPhase + profile * 1.8);
+  vec3 color = mix(uInk, uJade, 0.24 + wash * 0.36);
+  color = mix(color, uLight, smoothstep(0.15, 1.0, profile) * 0.22);
+  float grain = noise2(vLocal.xy * 6.0) - 0.5;
+  color *= 1.0 + grain * 0.025;
 
-  // Broken, slanted mineral seams catch a cool blue-hour rim across the cliff face.
-  float strata = sin(vLocal.y * 4.7 + vLocal.x * 0.31 + grain * 2.0);
-  float seam = smoothstep(0.91, 0.995, strata) * smoothstep(0.22, 0.64, tooth);
-  color = mix(color, uLight, seam * 0.34);
-  float inkWash = smoothstep(0.77, 0.96, noise2(vLocal.xy * 1.9 + vec2(vLocal.z, -vLocal.x)));
-  color *= 1.0 - inkWash * 0.24;
-
-  // Sparse ochre flecks, like dry-brushed mineral pigment rather than a glitter layer.
-  vec2 fleckCell = floor(vec2(vLocal.x * 5.0 + vLocal.y * 1.4, vLocal.y * 7.0));
-  float fleck = step(0.991, hash21(fleckCell)) * smoothstep(0.18, 0.75, grain);
-  color = mix(color, uGold, fleck * 0.72);
-  float distanceWash = smoothstep(48.0, 145.0, uDistance);
-  color = mix(color, uLight * 0.78 + uJade * 0.22, distanceWash * 0.3);
+  // Fine parallel contour ribbons follow each actual crest, like woodblock linework.
+  float band = profile * (6.0 - uLayer) + sin(vLocal.x * 0.10 + uPhase) * 0.08;
+  float edge = abs(fract(band + 0.5) - 0.5);
+  float aa = max(fwidth(band), 0.001);
+  float line = 1.0 - smoothstep(aa * 0.28, aa * 1.25, edge);
+  float endFade = 1.0 - smoothstep(0.60, 0.93, abs(vLocal.x) * 2.0 / uWidth);
+  float restraint = smoothstep(0.12, 0.3, profile) * (1.0 - smoothstep(0.90, 1.0, profile)) * endFade;
+  color = mix(color, uContourColor, line * restraint * uContourOpacity);
+  float crestEdge = (1.0 - smoothstep(0.0, max(fwidth(profile) * 1.1, 0.002), 1.0 - profile));
+  color = mix(color, uContourColor, crestEdge * uContourOpacity * 0.7);
+  // A soft low wash separates overlapping hills without opaque cloud-shaped blobs.
+  color = mix(color, uLight, (1.0 - smoothstep(0.02, 0.24, profile)) * 0.16);
   gl_FragColor = vec4(color, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -65,7 +71,6 @@ interface RidgeLayer {
   height: number;
   heightSpread: number;
   width: number;
-  depth: number;
   colors: [number, number, number];
 }
 
@@ -73,32 +78,29 @@ const layers: RidgeLayer[] = [
   {
     count: 10,
     radius: 69,
-    radiusSpread: 11,
-    height: 18,
-    heightSpread: 7,
-    width: 50,
-    depth: 3.8,
-    colors: [0x173d35, 0x286352, 0x81ad8d],
+    radiusSpread: 10,
+    height: 15,
+    heightSpread: 6,
+    width: 58,
+    colors: [0x162b3c, 0x23584e, 0x5c8885],
   },
   {
     count: 11,
     radius: 101,
-    radiusSpread: 13,
+    radiusSpread: 12,
     height: 23,
-    heightSpread: 9,
-    width: 61,
-    depth: 2.2,
-    colors: [0x254d48, 0x39766b, 0x91bdb0],
+    heightSpread: 8,
+    width: 70,
+    colors: [0x294752, 0x396e68, 0x71968f],
   },
   {
     count: 12,
     radius: 133,
-    radiusSpread: 13,
-    height: 28,
-    heightSpread: 10,
-    width: 76,
-    depth: 0.6,
-    colors: [0x385c60, 0x587f7d, 0xa3c1b8],
+    radiusSpread: 12,
+    height: 29,
+    heightSpread: 9,
+    width: 83,
+    colors: [0x455f75, 0x628283, 0x8fa8a8],
   },
 ];
 
@@ -106,54 +108,53 @@ function ridgeGeometry(
   seed: number,
   width: number,
   height: number,
+  high: boolean,
 ): THREE.BufferGeometry {
-  const columns = 64;
-  const rows = 18;
-  const positions: number[] = [];
-  const indices: number[] = [];
+  const columns = high ? 128 : 80;
+  const rows = 8;
+  const positions: number[] = [],
+    crests: number[] = [],
+    indices: number[] = [];
   const phase = seed * 1.713;
-  const peaks = 2 + (seed % 3);
+  const peaks = 2 + (seed % 2);
   const centers = Array.from(
     { length: peaks },
     (_, i) =>
-      -0.77 + (i + 0.5) * (1.54 / peaks) + Math.sin(seed * 2.1 + i * 5.3) * 0.1,
+      -0.66 +
+      (i + 0.5) * (1.32 / peaks) +
+      Math.sin(seed * 2.1 + i * 5.3) * 0.13,
   );
   const heights = centers.map(
-    (_, i) => 0.58 + 0.42 * (0.5 + 0.5 * Math.sin(phase + i * 2.7)),
+    (_, i) => 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(phase + i * 2.7)),
   );
   const widths = centers.map(
-    (_, i) => 0.11 + 0.07 * (0.5 + 0.5 * Math.cos(phase * 0.7 + i * 3.2)),
+    (_, i) => 0.23 + 0.17 * (0.5 + 0.5 * Math.cos(phase * 0.7 + i * 3.2)),
   );
   for (let row = 0; row <= rows; row++) {
     const t = row / rows;
     for (let col = 0; col <= columns; col++) {
       const u = (col / columns) * 2 - 1;
-      let crest = 0.12;
+      let crest = 0.09;
       for (let p = 0; p < peaks; p++) {
         const offset = (u - centers[p]!) / widths[p]!;
-        const asym = offset < 0 ? 0.78 : 1.14;
-        crest = Math.max(
-          crest,
-          heights[p]! * Math.exp(-offset * offset * asym),
-        );
+        const asym = offset < 0 ? 0.7 : 1.18;
+        // Occasional steeper far peaks, with predominantly long rounded shoulders.
+        const power = seed % 7 === 0 ? 1.35 : 2.4;
+        crest +=
+          heights[p]! *
+          Math.exp(-Math.pow(Math.abs(offset), power) * asym) *
+          0.78;
       }
-      const shoulder =
-        0.06 * Math.sin(u * 17 + phase) +
-        0.035 * Math.sin(u * 31 - phase * 1.8);
-      const silhouette =
-        Math.max(0.055, crest + shoulder) *
-        Math.pow(Math.max(0, 1 - u * u), 0.22);
-      const ridgeY = height * silhouette;
-      const cut =
-        Math.sin(u * 21 + phase) * Math.sin(t * 11 + phase * 0.6) * 0.13 +
-        Math.sin(u * 49 - t * 17 + phase) * 0.045;
-      const y = 0.08 + ridgeY * t + cut * t * (1 - t * 0.4);
-      const z =
-        -t * (1.5 + silhouette * 2.8) + Math.sin(u * 13 + phase) * t * 0.22;
+      const taper = Math.pow(Math.max(0, 1 - u * u), 0.28);
+      const ridgeY = height * crest * taper;
+      const crestY = 0.08 + ridgeY;
+      const y = 0.08 + ridgeY * t;
+      const z = -t * (1.1 + crest * 2.4) + Math.sin(u * 5.0 + phase) * t * 0.32;
       positions.push(u * width * 0.5, y, z);
+      crests.push(crestY);
       if (row < rows && col < columns) {
-        const a = row * (columns + 1) + col;
-        const b = a + columns + 1;
+        const a = row * (columns + 1) + col,
+          b = a + columns + 1;
         indices.push(a, b, a + 1, b, b + 1, a + 1);
       }
     }
@@ -163,6 +164,7 @@ function ridgeGeometry(
     "position",
     new THREE.Float32BufferAttribute(positions, 3),
   );
+  geometry.setAttribute("aCrest", new THREE.Float32BufferAttribute(crests, 1));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -170,18 +172,22 @@ function ridgeGeometry(
 
 function ridgeMaterial(
   colors: [number, number, number],
-  distance: number,
+  seed: number,
+  layer: number,
+  width: number,
 ): THREE.ShaderMaterial {
-  const color = (hex: number) => new THREE.Color(hex);
   return new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
       {
-        uInk: { value: color(colors[0]) },
-        uJade: { value: color(colors[1]) },
-        uLight: { value: color(colors[2]) },
-        uGold: { value: color(0xd5ad69) },
-        uDistance: { value: distance },
+        uInk: { value: new THREE.Color(colors[0]) },
+        uJade: { value: new THREE.Color(colors[1]) },
+        uLight: { value: new THREE.Color(colors[2]) },
+        uContourColor: { value: new THREE.Color(0xe0cba6) },
+        uContourOpacity: { value: 0.24 - layer * 0.055 },
+        uPhase: { value: seed * 1.713 },
+        uLayer: { value: layer },
+        uWidth: { value: width },
       },
     ]),
     vertexShader,
@@ -191,7 +197,7 @@ function ridgeMaterial(
   });
 }
 
-/** Creates a procedural, painterly ring of layered jade-and-ink karst ridges. */
+/** Original flowing contour landscape inspired by layered printmaking, adapted to blue hour. */
 export function createPaintedMountains(high: boolean): THREE.Group {
   const horizon = new THREE.Group();
   horizon.name = "karst horizon";
@@ -213,8 +219,8 @@ export function createPaintedMountains(high: boolean): THREE.Group {
       const width =
         layer.width + Math.cos(i * 6.1 + layerIndex * 0.7) * layer.width * 0.15;
       const ridge = new THREE.Mesh(
-        ridgeGeometry(seed, width, height),
-        ridgeMaterial(layer.colors, radius),
+        ridgeGeometry(seed, width, height, high),
+        ridgeMaterial(layer.colors, seed, layerIndex, width),
       );
       ridge.position.set(
         Math.sin(angle) * radius,

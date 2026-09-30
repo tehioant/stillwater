@@ -3,6 +3,28 @@ import { describe, expect, it } from "vitest";
 import { createPaintedMountains } from "./landscape";
 
 describe("createPaintedMountains", () => {
+  it("provides crest-following contours on broad curved ridges", () => {
+    const horizon = createPaintedMountains(true);
+    for (const ridge of horizon.children as THREE.Mesh<
+      THREE.BufferGeometry,
+      THREE.ShaderMaterial
+    >[]) {
+      const positions = ridge.geometry.getAttribute("position");
+      const crests = ridge.geometry.getAttribute("aCrest");
+      expect(crests).toBeDefined();
+      expect(crests.count).toBe(positions.count);
+      for (let i = 0; i < crests.count; i++) {
+        expect(crests.getX(i)).toBeGreaterThan(0);
+        expect(positions.getY(i)).toBeLessThanOrEqual(crests.getX(i) + 0.001);
+      }
+      expect(ridge.material.uniforms.uWidth?.value).toBeGreaterThan(0);
+      expect(ridge.material.uniforms.uContourColor).toBeDefined();
+      expect(ridge.material.uniforms.uContourOpacity.value).toBeLessThanOrEqual(
+        0.28,
+      );
+      expect(ridge.material.fragmentShader).not.toContain("fleckCell");
+    }
+  });
   it("presents broad painted faces tangent to the pond, with complete fog uniforms", () => {
     const horizon = createPaintedMountains(true);
     for (const ridge of horizon.children as THREE.Mesh<
