@@ -57,7 +57,7 @@ const navigation = initialNavigation();
 const pointer = new THREE.Vector2(-10, -10);
 const raycaster = new THREE.Raycaster();
 let tappedId: string | null = null;
-let tapExpires = 0;
+let tapRemaining = 0;
 let dragged = false;
 let dragging: { x: number; y: number; id: number } | null = null;
 let elapsed = 0;
@@ -284,7 +284,7 @@ async function initialize() {
     if (!dragged) {
       updatePointer(e);
       tappedId = hoveredEntity()?.id ?? null;
-      tapExpires = performance.now() + 3500;
+      tapRemaining = 3.5;
     }
     if (e.pointerType === "touch") pointer.set(-10, -10);
     dragging = null;
@@ -353,7 +353,7 @@ async function initialize() {
     scene.updateMatrixWorld();
     camera.updateMatrixWorld();
     const hover = dragging ? undefined : hoveredEntity();
-    if (now > tapExpires) tappedId = null;
+    if (tapRemaining <= 0) tappedId = null;
     let overWater = false;
     if (
       entered &&
@@ -395,6 +395,8 @@ async function initialize() {
         : "A warm light, blushing red."
       : "";
     world.update(elapsed, interactionDt, reducedMotion);
+    // Count rendered interaction time, so a stalled frame cannot discard a new tap.
+    tapRemaining = Math.max(0, tapRemaining - interactionDt);
     renderer.render(scene, camera);
   }
   frame(performance.now());
