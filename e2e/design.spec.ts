@@ -71,7 +71,7 @@ test("the sky contains stars and lanterns float at different heights above the w
 }) => {
   await enter(page);
   const scene = await snapshot(page);
-  expect(scene.stars).toBeGreaterThanOrEqual(300);
+  expect(scene.stars).toBeGreaterThanOrEqual(2400);
   const lanterns = scene.entities.filter((e: any) => e.kind === "lantern");
   expect(
     lanterns.filter((e: any) => e.position[1] > 2).length,

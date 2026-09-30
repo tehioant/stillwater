@@ -18,18 +18,29 @@ describe("createWorld scene contract", () => {
     world.dispose();
   });
 
-  it("adds a quiet, finite star field above the pond horizon", () => {
-    const world = createWorld(null as unknown as THREE.WebGLRenderer, "high");
-    const stars = world.scene.getObjectByName("quiet stars") as THREE.Points;
-    expect(stars).toBeInstanceOf(THREE.Points);
-    const positions = stars.geometry.getAttribute("position");
-    expect(positions.count).toBeGreaterThanOrEqual(300);
-    for (let i = 0; i < positions.count; i++) {
-      expect(positions.getY(i)).toBeGreaterThan(0);
-      expect(Number.isFinite(positions.getX(i))).toBe(true);
-    }
-    world.dispose();
-  });
+  it.each([
+    ["high", 2400],
+    ["low", 1200],
+  ] as const)(
+    "fills the %s sky with at least %i quiet, finite stars",
+    (quality, minimum) => {
+      const world = createWorld(
+        null as unknown as THREE.WebGLRenderer,
+        quality,
+      );
+      const stars = world.scene.getObjectByName("quiet stars") as THREE.Points;
+      expect(stars).toBeInstanceOf(THREE.Points);
+      const positions = stars.geometry.getAttribute("position");
+      expect(positions.count).toBeGreaterThanOrEqual(minimum);
+      expect(stars.geometry.getAttribute("aSize").count).toBe(positions.count);
+      expect(stars.geometry.getAttribute("aPhase").count).toBe(positions.count);
+      for (let i = 0; i < positions.count; i++) {
+        expect(positions.getY(i)).toBeGreaterThan(0);
+        expect(Number.isFinite(positions.getX(i))).toBe(true);
+      }
+      world.dispose();
+    },
+  );
 
   it("turns only the hovered lantern red and returns to amber on leave", () => {
     const world = createWorld(null as unknown as THREE.WebGLRenderer, "low");

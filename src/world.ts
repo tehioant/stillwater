@@ -349,7 +349,7 @@ function createStars(high: boolean): THREE.Points {
   const positions: number[] = [],
     sizes: number[] = [],
     phases: number[] = [];
-  const count = high ? 480 : 240;
+  const count = high ? 2400 : 1200;
   for (let i = 0; i < count; i++) {
     const azimuth = i * 2.399963;
     const elevation = 0.09 + (((i * 83) % count) / count) * 1.44;

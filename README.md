@@ -21,7 +21,7 @@ Open the local URL printed by Vite. Everything is rendered locally; no account, 
 - **Nearby lotuses:** gently open on approach; hover to open further.
 - **Lanterns:** warm on approach and blush red on hover or tap; some float on the water, others drift above it.
 - **Water:** reflects the world and softly glides/ripples beneath the cursor.
-- **Sky:** a sparse, gently twinkling star field above the blue-hour mountain horizon.
+- **Sky:** a rich, gently twinkling star field above the blue-hour mountain horizon (2,400 stars on desktop, 1,200 in touch/low-quality mode).
 - **Touch:** drag to look, arrow controls to glide, and tap nearby objects.
 - **Sound:** optional synthesized quiet water/wind, off until you enable it. Automatically turns off when the tab is hidden.
 - **Motion:** freeze ambient motion. Respects the operating system's reduced-motion preference; intentional navigation remains available.
