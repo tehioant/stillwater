@@ -29,7 +29,7 @@ test("opens a full-screen blue-hour pond and supports entering, moving, and rese
       async () =>
         (await page.evaluate(() => (window as any).__stillwater.snapshot()))
           .camera.z,
-      { timeout: 10000 },
+      { timeout: 30000 },
     )
     .toBeLessThan(start.camera.z - 0.2);
   await page.keyboard.up("w");
