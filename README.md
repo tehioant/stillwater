@@ -17,7 +17,7 @@ Open the local URL printed by Vite. Everything is rendered locally; no account, 
 
 - **Enter the pond** to begin.
 - **WASD / arrow keys:** glide above the water.
-- **Click and drag:** look around. The mouse remains available for hovering.
+- **Mouse direction:** move toward the top/bottom to glide forward/backward and left/right to turn. The centre is a quiet zone to slow to a stop; farther from centre moves faster. No click or hold is required, and hovering a nearby flower/lantern or moving onto controls pauses navigation. Click-drag look remains available.
 - **Nearby lotuses:** gently open on approach; hover to open further.
 - **Lanterns:** warm on approach and blush red on hover or tap; some float on the water, others drift above it.
 - **Water:** reflects the world and softly glides/ripples beneath the cursor.

@@ -35,6 +35,20 @@ test("lotus hover opens further and lantern hover warms light; leaving restores 
       (e: any) => e.id === id,
     );
     expect(hovered.response).toBe(1);
+    const restingCamera = (await snapshot(page)).camera;
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          let remaining = 6;
+          const next = () =>
+            --remaining === 0 ? resolve() : requestAnimationFrame(next);
+          requestAnimationFrame(next);
+        }),
+    );
+    expect((await snapshot(page)).camera).toEqual(restingCamera);
+    expect(
+      (await snapshot(page)).entities.find((e: any) => e.id === id).response,
+    ).toBe(1);
     await page.waitForTimeout(650);
     await page.mouse.move(4, 4);
     const left = (await snapshot(page)).entities.find((e: any) => e.id === id);

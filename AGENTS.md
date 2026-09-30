@@ -8,7 +8,7 @@ A peaceful blue-hour Three.js pond. Use TypeScript, Vite, plain DOM/CSS, procedu
 - Use vertical test-first slices: observe each new behavior fail before implementing it.
 - `npm test` runs Vitest unit tests; `npm run test:e2e` runs real Chromium browser tests. `npm run build` typechecks and builds production.
 - Tests cover interactions, camera movement/bounds, touch equivalents, motion preference, audio lifecycle, and graceful renderer failure.
-- Preserve the cursor: click-drag look, WASD/arrow glide. Never capture mouse implicitly.
+- Preserve the cursor: mouse direction steers/glides without a held button, with a quiet centre; WASD/arrow glide and touch-drag look remain available. Never capture mouse implicitly.
 - Reduced motion disables ambient animation, not just CSS. UI must be keyboard-operable and legible.
 - Create no public deployments. The GitHub repository must be private.
 

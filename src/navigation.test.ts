@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { advanceNavigation, initialNavigation } from "./navigation";
+import {
+  advanceNavigation,
+  initialNavigation,
+  pointerNavigation,
+} from "./navigation";
+
+it("maps mouse direction to bounded glide and turn with a quiet centre", () => {
+  expect(pointerNavigation(0, 0)).toEqual({ forward: 0, turn: 0 });
+  expect(pointerNavigation(0.4, -0.4)).toEqual({ forward: 0, turn: 0 });
+  expect(pointerNavigation(1, 1)).toEqual({ forward: 1, turn: 1 });
+  expect(pointerNavigation(-1, -1)).toEqual({ forward: -1, turn: -1 });
+  expect(pointerNavigation(-10, -10)).toEqual({ forward: 0, turn: 0 });
+});
 
 describe("peaceful navigation", () => {
   it("preserves glide speed at low frame rates using bounded simulation steps", () => {

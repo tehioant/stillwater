@@ -6,14 +6,14 @@ async function enter(page: Page) {
   await page.getByRole("button", { name: "Enter the pond" }).click();
 }
 
-test("water glides with the mouse without steering the camera", async ({
+test("water responds in the quiet centre without steering the camera", async ({
   page,
 }) => {
   await enter(page);
   const start = await snapshot(page);
   expect(start.water.reflective).toBe(true);
-  await page.mouse.move(400, 530);
-  await page.mouse.move(900, 580, { steps: 10 });
+  await page.mouse.move(400, 400);
+  await page.mouse.move(650, 420, { steps: 10 });
   await expect
     .poll(async () => Math.hypot(...(await snapshot(page)).water.flow))
     .toBeGreaterThan(0.02);

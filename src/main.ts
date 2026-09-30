@@ -1,7 +1,11 @@
 import "./style.css";
 import * as THREE from "three";
 import { createWorld } from "./world";
-import { initialNavigation, advanceNavigation } from "./navigation";
+import {
+  initialNavigation,
+  advanceNavigation,
+  pointerNavigation,
+} from "./navigation";
 import { interactionTarget } from "./interaction";
 import { createAmbience } from "./audio";
 
@@ -26,7 +30,7 @@ document.querySelector("#app")!.innerHTML = `
    <button id="enter" class="enter" disabled>Preparing the pond…</button>
    <span class="welcome-note">Move gently. Stay a while.</span>
   </section>
-  <div id="after-entry" hidden><div class="scene-caption"><span class="eyebrow">THE LOTUS POND</span><p>Some things open<br>when you come closer.</p></div><p id="hint" class="hint">WASD / arrows to glide <span>·</span> drag to look <span>·</span> hover to discover</p></div>
+  <div id="after-entry" hidden><div class="scene-caption"><span class="eyebrow">THE LOTUS POND</span><p>Some things open<br>when you come closer.</p></div><p id="hint" class="hint">Mouse to steer <span>·</span> centre to rest <span>·</span> hover to discover</p></div>
   <footer class="bottom-bar"><span class="footer-note">A moment, just for you.</span><nav aria-label="Pond controls">
    <button id="sound" aria-label="Enable ambient sound" aria-pressed="false" title="Ambient sound">${icons.sound}<span>Sound off</span></button>
    <button id="motion" aria-label="Reduce motion" aria-pressed="false" title="Reduce motion">${icons.motion}<span>Motion</span></button>
@@ -35,7 +39,7 @@ document.querySelector("#app")!.innerHTML = `
   </nav></footer>
   <div id="touch-controls" hidden aria-label="Glide controls"><button data-forward="1" aria-label="Glide forward">↑</button><div><button data-right="-1" aria-label="Glide left">←</button><button data-forward="-1" aria-label="Glide backward">↓</button><button data-right="1" aria-label="Glide right">→</button></div></div>
   <div id="hover-label" aria-hidden="true"></div><p id="notice" role="status" aria-live="polite"></p>
-  <dialog id="guide" aria-labelledby="guide-title"><button id="close-guide" aria-label="Close guide">×</button><span class="eyebrow">TAKE YOUR TIME</span><h2 id="guide-title">A little wayfinding</h2><p><b>Glide</b> with WASD or the arrow keys.<br><b>Look around</b> by clicking and dragging.<br><b>Pause over a lotus</b> nearby to see it unfold.<br><b>Approach a lantern</b> to warm its light.</p><p class="guide-secondary">On touch screens, drag to look, use the arrows to glide, and tap a flower or lantern. Sound is optional. Motion can be paused anytime.</p><button id="continue" class="enter">Back to the pond</button></dialog>
+  <dialog id="guide" aria-labelledby="guide-title"><button id="close-guide" aria-label="Close guide">×</button><span class="eyebrow">TAKE YOUR TIME</span><h2 id="guide-title">A little wayfinding</h2><p><b>Steer with your mouse</b> — no click or hold needed.<br>Move toward the top or bottom to glide forward or back; left or right to turn.<br><b>Rest</b> in the centre to slow to a stop.<br>WASD / arrows and click-drag look also work.<br><b>Pause over a lotus</b> nearby to see it unfold.<br><b>Approach a lantern</b> to warm its light.</p><p class="guide-secondary">On touch screens, drag to look, use the arrows to glide, and tap a flower or lantern. Sound is optional. Motion can be paused anytime.</p><button id="continue" class="enter">Back to the pond</button></dialog>
  </section>`;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -58,6 +62,7 @@ const pointer = new THREE.Vector2(-10, -10);
 const raycaster = new THREE.Raycaster();
 let tappedId: string | null = null;
 let tapRemaining = 0;
+let mouseSteering = false;
 let dragged = false;
 let dragging: { x: number; y: number; id: number } | null = null;
 let elapsed = 0;
@@ -87,6 +92,7 @@ mediaMotion.addEventListener("change", (e) => {
   syncMotion();
 });
 function clearMovement() {
+  mouseSteering = false;
   keys.clear();
   touchMovement.forward = touchMovement.right = 0;
   navigation.vx = navigation.vz = 0;
@@ -135,7 +141,7 @@ function syncTouch() {
   $("touch-controls").hidden = !entered || !mediaTouch.matches;
   $("hint").textContent = mediaTouch.matches
     ? "Drag to look · arrows to glide · tap to discover"
-    : "WASD / arrows to glide · drag to look · hover to discover";
+    : "Mouse to steer · centre to rest · hover to discover";
 }
 mediaTouch.addEventListener("change", syncTouch);
 enter.addEventListener("click", () => {
@@ -223,7 +229,7 @@ async function initialize() {
   canvas.tabIndex = 0;
   canvas.setAttribute(
     "aria-label",
-    "Explore the pond: WASD or arrow keys to glide, drag to look.",
+    "Explore the pond: mouse direction to steer, centre to rest; WASD or arrow keys to glide, drag to look.",
   );
   container.appendChild(canvas);
   const world = createWorld(renderer, mediaTouch.matches ? "low" : "high");
@@ -259,6 +265,7 @@ async function initialize() {
   canvas.addEventListener("pointerdown", (e) => {
     if (!entered || guide.open || e.button !== 0) return;
     canvas.focus();
+    mouseSteering = false;
     updatePointer(e);
     dragged = false;
     dragging = { x: e.clientX, y: e.clientY, id: e.pointerId };
@@ -266,6 +273,8 @@ async function initialize() {
   });
   canvas.addEventListener("pointermove", (e) => {
     updatePointer(e);
+    mouseSteering =
+      e.pointerType === "mouse" && e.buttons === 0 && entered && !guide.open;
     if (!dragging || dragging.id !== e.pointerId) return;
     const dx = e.clientX - dragging.x,
       dy = e.clientY - dragging.y;
@@ -296,6 +305,8 @@ async function initialize() {
     dragging = null;
   });
   canvas.addEventListener("pointerleave", () => {
+    if (mouseSteering && keys.size === 0) navigation.vx = navigation.vz = 0;
+    mouseSteering = false;
     if (!dragging) pointer.set(-10, -10);
   });
   canvas.addEventListener("webglcontextlost", (e) => {
@@ -346,8 +357,32 @@ async function initialize() {
       Number(keys.has("d") || keys.has("arrowright")) -
       Number(keys.has("a") || keys.has("arrowleft")) +
       touchMovement.right;
-    if (entered && !guide.open)
-      advanceNavigation(navigation, { forward, right }, interactionDt);
+    if (entered && !guide.open) {
+      const canSteer = mouseSteering && !dragging && keys.size === 0;
+      const underMouse = canSteer ? hoveredEntity() : undefined;
+      const inspecting =
+        underMouse &&
+        interactionTarget(
+          underMouse.kind,
+          Math.hypot(
+            underMouse.position.x - navigation.x,
+            underMouse.position.z - navigation.z,
+          ),
+          true,
+        ) > 0;
+      // Pause over nearby objects so steering cannot pull them away mid-hover.
+      if (inspecting) navigation.vx = navigation.vz = 0;
+      const steering =
+        canSteer && !inspecting
+          ? pointerNavigation(pointer.x, pointer.y)
+          : { forward: 0, turn: 0 };
+      navigation.yaw -= steering.turn * 0.65 * interactionDt;
+      advanceNavigation(
+        navigation,
+        { forward: forward + steering.forward, right },
+        interactionDt,
+      );
+    }
     camera.position.set(navigation.x, navigation.y, navigation.z);
     camera.rotation.set(navigation.pitch, navigation.yaw, 0);
     scene.updateMatrixWorld();
@@ -388,7 +423,9 @@ async function initialize() {
       ? "grabbing"
       : responsiveHover
         ? "pointer"
-        : "grab";
+        : mediaTouch.matches
+          ? "grab"
+          : "default";
     $("hover-label").textContent = responsiveHover
       ? hover.kind === "lotus"
         ? "A little closer, a little more open."

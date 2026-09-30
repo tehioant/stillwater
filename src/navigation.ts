@@ -11,6 +11,21 @@ export interface Movement {
   forward: number;
   right: number;
 }
+// Normalized canvas coordinates: positive y points toward the horizon.
+export function pointerNavigation(x: number, y: number) {
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    Math.abs(x) > 1 ||
+    Math.abs(y) > 1
+  )
+    return { forward: 0, turn: 0 };
+  const axis = (value: number) =>
+    Math.abs(value) <= 0.45
+      ? 0
+      : (Math.sign(value) * (Math.abs(value) - 0.45)) / 0.55;
+  return { forward: axis(y), turn: axis(x) };
+}
 export const initialNavigation = (): Navigation => ({
   x: 0,
   y: 2.2,
