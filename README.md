@@ -20,7 +20,7 @@ Open the local URL printed by Vite. Everything is rendered locally; no account, 
 - **Mouse direction:** move toward the top/bottom to glide forward/backward and left/right to turn. The centre is a quiet zone to slow to a stop; farther from centre moves faster. No click or hold is required, and hovering a nearby flower/lantern or moving onto controls pauses navigation. Click-drag look remains available.
 - **Nearby lotuses:** gently open on approach; hover to open further.
 - **Lanterns:** warm on approach and blush red on hover or tap; some float on the water, others drift above it.
-- **Water:** moving the mouse over the pond leaves spreading wave rings and a fading wake, bending reflections locally. No click is needed; Motion/Still mode freezes the waves.
+- **Water:** click or tap the pond to create a gentle spreading ripple that fades naturally, bending reflections locally. Hovering, holding, and dragging do not create waves; Motion/Still mode freezes them.
 - **Sky:** a rich, gently twinkling star field above the blue-hour mountain horizon (2,400 stars on desktop, 1,200 in touch/low-quality mode).
 - **Touch:** drag to look, arrow controls to glide, and tap nearby objects.
 - **Sound:** optional synthesized quiet water/wind, off until you enable it. Automatically turns off when the tab is hidden.

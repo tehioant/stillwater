@@ -33,9 +33,9 @@ try {
     await page.screenshot({ path: `${directory}/${label}-before.png` });
     const start = await page.evaluate(() => window.__stillwater.snapshot());
     // Mouse input exercises both shader quality modes without moving the camera.
-    await page.mouse.move(width * 0.43, height * 0.69);
+    await page.mouse.click(width * 0.43, height * 0.69);
     await page.clock.fastForward(100);
-    await page.mouse.move(width * 0.68, height * 0.7, { steps: 10 });
+    await page.mouse.click(width * 0.68, height * 0.7);
     for (let frame = 0; frame < 12; frame++) {
       await page.clock.fastForward(250);
       await page.screenshot({

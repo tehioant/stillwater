@@ -6,49 +6,116 @@ async function enter(page: Page) {
   await page.getByRole("button", { name: "Enter the pond" }).click();
 }
 
-test("water responds in the quiet centre without steering the camera", async ({
+test("water ripples only on a click, not hover, hold, drag, or controls", async ({
   page,
 }) => {
+  await page.clock.install();
   await enter(page);
+  await page.clock.pauseAt(
+    await page.evaluate(() => new Date(Date.now() + 100)),
+  );
+  const activeWaves = async () =>
+    (await snapshot(page)).water.ripples.filter(
+      (wave: number[]) => wave[3] > 0,
+    );
   const start = await snapshot(page);
   expect(start.water.reflective).toBe(true);
   await page.mouse.move(400, 400);
-  await expect
-    .poll(
-      async () =>
-        ((await snapshot(page)).water.ripples ?? []).filter(
-          (wave: number[]) => wave[3] > 0,
-        ).length,
-    )
-    .toBeGreaterThan(0);
-  const first = (await snapshot(page)).water.ripples.find(
-    (wave: number[]) => wave[3] > 0,
-  );
+  await page.clock.fastForward(250);
+  expect(await activeWaves()).toHaveLength(0);
+  expect((await snapshot(page)).water.flow).toEqual([0, 0]);
+  await page.mouse.down();
+  await page.clock.fastForward(250);
+  expect(await activeWaves()).toHaveLength(0);
+  await page.mouse.up();
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(1);
+  const first = (await activeWaves())[0];
   await page.mouse.move(650, 420, { steps: 10 });
-  await expect
-    .poll(async () =>
-      (await snapshot(page)).water.ripples.some(
-        (wave: number[]) =>
-          wave[3] > 0 &&
-          Math.hypot(wave[0] - first[0], wave[1] - first[1]) > 0.35,
-      ),
-    )
-    .toBe(true);
-  await expect
-    .poll(async () => Math.hypot(...(await snapshot(page)).water.flow))
-    .toBeGreaterThan(0.02);
+  await page.clock.fastForward(250);
+  expect(await activeWaves()).toHaveLength(1);
+  expect((await activeWaves())[0].slice(0, 2)).toEqual(first.slice(0, 2));
+  await page.mouse.click(650, 420);
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(2);
+  await page.mouse.click(650, 420);
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(3);
   const after = await snapshot(page);
   expect(after.camera.x).toBe(start.camera.x);
   expect(after.camera.z).toBe(start.camera.z);
   expect(after.camera.yaw).toBe(start.camera.yaw);
-  expect(after.water.strength).toBeGreaterThan(0);
+  await page.mouse.down();
+  await page.mouse.move(680, 440, { steps: 5 });
+  await page.mouse.up();
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(3);
+  await page.mouse.click(650, 420, { button: "right" });
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(3);
+  await page.mouse.click(400, 40);
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(3);
+  // A pending click is discarded on focus loss, not replayed on return.
+  await page.mouse.click(400, 400);
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(3);
   await page.getByRole("button", { name: "Reduce motion" }).click();
-  const frozen = (await snapshot(page)).water.flow;
-  const frozenWaves = (await snapshot(page)).water.ripples;
-  await page.mouse.move(280, 560);
-  await page.waitForTimeout(300);
-  expect((await snapshot(page)).water.flow).toEqual(frozen);
-  expect((await snapshot(page)).water.ripples).toEqual(frozenWaves);
+  const frozen = (await snapshot(page)).water.ripples;
+  await page.mouse.click(400, 400);
+  await page.clock.fastForward(250);
+  expect((await snapshot(page)).water.ripples).toEqual(frozen);
+  await page.getByRole("button", { name: "Enable gentle motion" }).click();
+  await page.clock.fastForward(100);
+  expect(await activeWaves()).toHaveLength(3);
+});
+
+test("touch taps create one water ripple even after a delayed frame; touch drags do not", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  await page.clock.install();
+  await enter(page);
+  await page.clock.pauseAt(
+    await page.evaluate(() => new Date(Date.now() + 100)),
+  );
+  const waves = async () =>
+    (await snapshot(page)).water.ripples.filter(
+      (wave: number[]) => wave[3] > 0,
+    );
+  expect(await waves()).toHaveLength(0);
+  await page.touchscreen.tap(170, 590);
+  await page.clock.fastForward(4000);
+  expect(await waves()).toHaveLength(1);
+  expect((await waves())[0][3]).toBeCloseTo(0.28);
+  await page.touchscreen.tap(170, 590);
+  await page.clock.fastForward(100);
+  expect(await waves()).toHaveLength(2);
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: 170, y: 590 }],
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: 210, y: 620 }],
+  });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await page.clock.fastForward(100);
+  expect(await waves()).toHaveLength(2);
+  await page.getByRole("button", { name: "Reset view" }).click();
+  await page.clock.fastForward(100);
+  expect(await waves()).toHaveLength(2);
+  await context.close();
 });
 
 test("hovering a lantern turns its actual material red and restores amber on leave", async ({

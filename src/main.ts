@@ -39,7 +39,7 @@ document.querySelector("#app")!.innerHTML = `
   </nav></footer>
   <div id="touch-controls" hidden aria-label="Glide controls"><button data-forward="1" aria-label="Glide forward">↑</button><div><button data-right="-1" aria-label="Glide left">←</button><button data-forward="-1" aria-label="Glide backward">↓</button><button data-right="1" aria-label="Glide right">→</button></div></div>
   <div id="hover-label" aria-hidden="true"></div><p id="notice" role="status" aria-live="polite"></p>
-  <dialog id="guide" aria-labelledby="guide-title"><button id="close-guide" aria-label="Close guide">×</button><span class="eyebrow">TAKE YOUR TIME</span><h2 id="guide-title">A little wayfinding</h2><p><b>Steer with your mouse</b> — no click or hold needed.<br>Move toward the top or bottom to glide forward or back; left or right to turn.<br><b>Rest</b> in the centre to slow to a stop.<br>WASD / arrows and click-drag look also work.<br><b>Pause over a lotus</b> nearby to see it unfold.<br><b>Approach a lantern</b> to warm its light.</p><p class="guide-secondary">On touch screens, drag to look, use the arrows to glide, and tap a flower or lantern. Sound is optional. Motion can be paused anytime.</p><button id="continue" class="enter">Back to the pond</button></dialog>
+  <dialog id="guide" aria-labelledby="guide-title"><button id="close-guide" aria-label="Close guide">×</button><span class="eyebrow">TAKE YOUR TIME</span><h2 id="guide-title">A little wayfinding</h2><p><b>Steer with your mouse</b> — no click or hold needed.<br>Move toward the top or bottom to glide forward or back; left or right to turn.<br><b>Rest</b> in the centre to slow to a stop.<br>WASD / arrows and click-drag look also work.<br><b>Click the water</b> to send out a gentle ripple.<br><b>Pause over a lotus</b> nearby to see it unfold.<br><b>Approach a lantern</b> to warm its light.</p><p class="guide-secondary">On touch screens, drag to look, use the arrows to glide, and tap a flower or lantern. Sound is optional. Motion can be paused anytime.</p><button id="continue" class="enter">Back to the pond</button></dialog>
  </section>`;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -62,6 +62,7 @@ const pointer = new THREE.Vector2(-10, -10);
 const raycaster = new THREE.Raycaster();
 let tappedId: string | null = null;
 let tapRemaining = 0;
+let pendingWaterClick: THREE.Vector2 | null = null;
 let mouseSteering = false;
 let dragged = false;
 let dragging: { x: number; y: number; id: number } | null = null;
@@ -92,6 +93,7 @@ mediaMotion.addEventListener("change", (e) => {
   syncMotion();
 });
 function clearMovement() {
+  pendingWaterClick = null;
   mouseSteering = false;
   keys.clear();
   touchMovement.forward = touchMovement.right = 0;
@@ -262,6 +264,8 @@ async function initialize() {
     }
     return undefined;
   }
+  const pondPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const waterPoint = new THREE.Vector3();
   canvas.addEventListener("pointerdown", (e) => {
     if (!entered || guide.open || e.button !== 0) return;
     canvas.focus();
@@ -294,6 +298,18 @@ async function initialize() {
       updatePointer(e);
       tappedId = hoveredEntity()?.id ?? null;
       tapRemaining = 3.5;
+      if (active && !guide.open && !reducedMotion) {
+        raycaster.setFromCamera(pointer, camera);
+        if (
+          Math.abs(pointer.x) <= 1 &&
+          Math.abs(pointer.y) <= 1 &&
+          raycaster.ray.direction.y < -0.02 &&
+          raycaster.ray.intersectPlane(pondPlane, waterPoint) !== null &&
+          waterPoint.distanceTo(camera.position) < 65
+        ) {
+          pendingWaterClick = new THREE.Vector2(waterPoint.x, waterPoint.z);
+        }
+      }
     }
     if (e.pointerType === "touch") pointer.set(-10, -10);
     dragging = null;
@@ -337,9 +353,6 @@ async function initialize() {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
-  const pondPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const waterPoint = new THREE.Vector3();
-  const waterPointer = new THREE.Vector2();
   let last = performance.now();
   function frame(now: number) {
     if (disposed) return;
@@ -389,23 +402,10 @@ async function initialize() {
     camera.updateMatrixWorld();
     const hover = dragging ? undefined : hoveredEntity();
     if (tapRemaining <= 0) tappedId = null;
-    let overWater = false;
-    if (
-      entered &&
-      !guide.open &&
-      !dragging &&
-      Math.abs(pointer.x) <= 1 &&
-      Math.abs(pointer.y) <= 1
-    ) {
-      raycaster.setFromCamera(pointer, camera);
-      overWater =
-        raycaster.ray.direction.y < -0.02 &&
-        raycaster.ray.intersectPlane(pondPlane, waterPoint) !== null &&
-        waterPoint.distanceTo(camera.position) < 65;
-    }
-    world.setWaterPointer(
-      overWater ? waterPointer.set(waterPoint.x, waterPoint.z) : null,
-    );
+    // Each completed click is a fresh impulse, never a hover-driven wake.
+    world.setWaterPointer(null);
+    if (!reducedMotion && !guide.open) world.setWaterPointer(pendingWaterClick);
+    pendingWaterClick = null;
     for (const entity of interactive) {
       const distance = Math.hypot(
         entity.position.x - navigation.x,
