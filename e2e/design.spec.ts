@@ -13,7 +13,27 @@ test("water responds in the quiet centre without steering the camera", async ({
   const start = await snapshot(page);
   expect(start.water.reflective).toBe(true);
   await page.mouse.move(400, 400);
+  await expect
+    .poll(
+      async () =>
+        ((await snapshot(page)).water.ripples ?? []).filter(
+          (wave: number[]) => wave[3] > 0,
+        ).length,
+    )
+    .toBeGreaterThan(0);
+  const first = (await snapshot(page)).water.ripples.find(
+    (wave: number[]) => wave[3] > 0,
+  );
   await page.mouse.move(650, 420, { steps: 10 });
+  await expect
+    .poll(async () =>
+      (await snapshot(page)).water.ripples.some(
+        (wave: number[]) =>
+          wave[3] > 0 &&
+          Math.hypot(wave[0] - first[0], wave[1] - first[1]) > 0.35,
+      ),
+    )
+    .toBe(true);
   await expect
     .poll(async () => Math.hypot(...(await snapshot(page)).water.flow))
     .toBeGreaterThan(0.02);
@@ -24,9 +44,11 @@ test("water responds in the quiet centre without steering the camera", async ({
   expect(after.water.strength).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Reduce motion" }).click();
   const frozen = (await snapshot(page)).water.flow;
+  const frozenWaves = (await snapshot(page)).water.ripples;
   await page.mouse.move(280, 560);
   await page.waitForTimeout(300);
   expect((await snapshot(page)).water.flow).toEqual(frozen);
+  expect((await snapshot(page)).water.ripples).toEqual(frozenWaves);
 });
 
 test("hovering a lantern turns its actual material red and restores amber on leave", async ({

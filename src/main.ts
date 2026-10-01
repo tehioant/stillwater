@@ -470,6 +470,9 @@ async function initialize() {
               reflective: "isReflector" in surface,
               flow: surface.material.uniforms.uFlow.value.toArray(),
               strength: surface.material.uniforms.uPointerStrength.value,
+              ripples: (
+                surface.material.uniforms.uRipples.value as THREE.Vector4[]
+              ).map((wave) => wave.toArray()),
             };
           })(),
           entities: interactive.map((e) => {
