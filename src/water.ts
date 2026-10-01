@@ -147,7 +147,7 @@ export function createWaterSurface(high: boolean) {
               THREE.MathUtils.lerp(origin.x, pointerTarget.x, blend),
               THREE.MathUtils.lerp(origin.y, pointerTarget.y, blend),
               0,
-              THREE.MathUtils.clamp(0.7 + distance * 0.12, 0.7, 1.2),
+              THREE.MathUtils.clamp(0.28 + distance * 0.048, 0.28, 0.48),
             );
             nextRipple = (nextRipple + 1) % rippleCount;
           }

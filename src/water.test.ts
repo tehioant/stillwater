@@ -29,6 +29,24 @@ it("leaves spreading wave packets at the mouse path instead of dragging one ripp
   water.dispose();
 });
 
+it.each([true, false])(
+  "keeps cursor waves gentle even after a fast sweep (high=%s)",
+  (high) => {
+    const water = createWaterSurface(high);
+    const waves = (water.mesh.material as THREE.ShaderMaterial).uniforms
+      .uRipples.value as THREE.Vector4[];
+    water.setPointer(new THREE.Vector2(2, 3));
+    water.update(0, 0.05, false);
+    expect(waves.find((wave) => wave.w > 0)!.w).toBeCloseTo(0.28);
+    water.setPointer(new THREE.Vector2(20, 3));
+    water.update(0.05, 0.05, false);
+    const active = waves.filter((wave) => wave.w > 0);
+    expect(active.length).toBeGreaterThan(1);
+    expect(Math.max(...active.map((wave) => wave.w))).toBeCloseTo(0.48);
+    water.dispose();
+  },
+);
+
 it("keeps calm water until the first pointer input and does not emit continuously at rest", () => {
   const water = createWaterSurface(true);
   const waves = (water.mesh.material as THREE.ShaderMaterial).uniforms.uRipples
