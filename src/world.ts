@@ -350,9 +350,17 @@ function createStars(high: boolean): THREE.Points {
     sizes: number[] = [],
     phases: number[] = [];
   const count = high ? 2400 : 1200;
+  let seed = 0x51a7f1e;
+  const random = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return (seed >>> 0) / 4294967296;
+  };
   for (let i = 0; i < count; i++) {
-    const azimuth = i * 2.399963;
-    const elevation = 0.09 + (((i * 83) % count) / count) * 1.44;
+    const azimuth = random() * Math.PI * 2;
+    // Uniform sky area, without crowding stars into rows or near the zenith.
+    const elevation = Math.asin(0.09 + random() * 0.905);
     const r = 94,
       h = Math.cos(elevation) * r;
     positions.push(
@@ -360,7 +368,9 @@ function createStars(high: boolean): THREE.Points {
       Math.sin(elevation) * r,
       -Math.cos(azimuth) * h,
     );
-    sizes.push(i % 31 === 0 ? 1.4 : 0.35 + ((i * 7) % 13) * 0.048);
+    sizes.push(
+      random() < 1 / 31 ? 1.2 + random() * 0.4 : 0.35 + random() * 0.6,
+    );
     phases.push(i * 1.71);
   }
   const geometry = new THREE.BufferGeometry();

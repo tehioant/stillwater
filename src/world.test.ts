@@ -42,6 +42,78 @@ describe("createWorld scene contract", () => {
     },
   );
 
+  it.each(["high", "low"] as const)(
+    "scatters the %s stars with irregular spacing across the sky instead of a lattice",
+    (quality) => {
+      const world = createWorld(
+        null as unknown as THREE.WebGLRenderer,
+        quality,
+      );
+      const stars = world.scene.getObjectByName("quiet stars") as THREE.Points;
+      const positions = stars.geometry.getAttribute("position");
+      const azimuths = Array.from(
+        { length: positions.count },
+        (_, i) =>
+          (Math.atan2(positions.getX(i), -positions.getZ(i)) + Math.PI * 2) %
+          (Math.PI * 2),
+      ).sort((a, b) => a - b);
+      const gaps = azimuths.map((angle, i) =>
+        i + 1 < azimuths.length
+          ? azimuths[i + 1] - angle
+          : azimuths[0] + Math.PI * 2 - angle,
+      );
+      const mean = (Math.PI * 2) / gaps.length;
+      const variation =
+        Math.sqrt(
+          gaps.reduce((sum, gap) => sum + (gap - mean) ** 2, 0) / gaps.length,
+        ) / mean;
+      // Random scatter has uneven gaps; the former golden-angle lattice was below 0.33.
+      expect(variation).toBeGreaterThan(0.6);
+      expect(variation).toBeLessThan(1.4);
+      const sectors = new Array<number>(8).fill(0);
+      for (const angle of azimuths)
+        sectors[Math.floor((angle / (Math.PI * 2)) * 8)]++;
+      const expected = positions.count / sectors.length;
+      expect(Math.min(...sectors)).toBeGreaterThan(expected * 0.6);
+      expect(Math.max(...sectors)).toBeLessThan(expected * 1.4);
+      world.dispose();
+    },
+  );
+
+  it.each(["high", "low"] as const)(
+    "gives the %s stars varied sizes with only a few larger stars",
+    (quality) => {
+      const world = createWorld(
+        null as unknown as THREE.WebGLRenderer,
+        quality,
+      );
+      const stars = world.scene.getObjectByName("quiet stars") as THREE.Points;
+      const sizes = Array.from(stars.geometry.getAttribute("aSize").array);
+      expect(new Set(sizes).size).toBeGreaterThan(sizes.length * 0.95);
+      expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.35);
+      expect(Math.max(...sizes)).toBeLessThanOrEqual(1.6);
+      const large = sizes.filter((size) => size >= 1.2).length;
+      expect(large).toBeGreaterThan(sizes.length * 0.015);
+      expect(large).toBeLessThan(sizes.length * 0.06);
+      world.dispose();
+    },
+  );
+
+  it("keeps scattered star positions reproducible and shared across quality modes", () => {
+    const worlds = (["high", "high", "low"] as const).map((quality) =>
+      createWorld(null as unknown as THREE.WebGLRenderer, quality),
+    );
+    const positions = worlds.map(
+      (world) =>
+        (
+          world.scene.getObjectByName("quiet stars") as THREE.Points
+        ).geometry.getAttribute("position").array,
+    );
+    expect(positions[1]).toEqual(positions[0]);
+    expect(positions[2]).toEqual(positions[0].slice(0, positions[2].length));
+    worlds.forEach((world) => world.dispose());
+  });
+
   it("turns only the hovered lantern red and returns to amber on leave", () => {
     const world = createWorld(null as unknown as THREE.WebGLRenderer, "low");
     const [one, two] = world.interactive.filter((e) => e.kind === "lantern");
