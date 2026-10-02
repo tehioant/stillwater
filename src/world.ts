@@ -17,6 +17,7 @@ export interface StillwaterWorld {
   camera: THREE.PerspectiveCamera;
   interactive: InteractiveEntity[];
   setWaterPointer(point: THREE.Vector2 | null): void;
+  setMountainOpening?(amount: number): void;
   update(elapsed: number, dt: number, reducedMotion: boolean): void;
   dispose(): void;
 }
@@ -483,9 +484,24 @@ void main(){
   pads.instanceMatrix.needsUpdate = true;
   scene.add(pads);
 
-  scene.add(createPaintedMountains(high));
+  const mountains = createPaintedMountains(high);
+  scene.add(mountains);
 
   const mistTexture = createMistTexture();
+  const passageMist = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: mistTexture,
+      color: 0xbfe0d6,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  passageMist.name = "mountain passage mist";
+  passageMist.position.set(0, 4, -71);
+  passageMist.scale.set(13, 19, 1);
+  scene.add(passageMist);
   const lanternGlowMaterial = new THREE.SpriteMaterial({
     map: mistTexture,
     color: 0xffb064,
@@ -652,6 +668,16 @@ void main(){
     interactive: entities,
     setWaterPointer(point) {
       waterSurface.setPointer(point);
+    },
+    setMountainOpening(amount) {
+      const opening = THREE.MathUtils.clamp(amount, 0, 1);
+      for (const ridge of mountains.children as THREE.Mesh<
+        THREE.BufferGeometry,
+        THREE.ShaderMaterial
+      >[]) {
+        ridge.material.uniforms.uOpening.value = opening;
+      }
+      passageMist.material.opacity = opening * 0.6;
     },
     update(elapsed, dt, reducedMotion) {
       if (disposed) return;

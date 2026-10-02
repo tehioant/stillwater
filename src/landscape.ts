@@ -5,10 +5,16 @@ attribute float aCrest;
 varying vec3 vLocal;
 varying float vCrest;
 varying float vFogDepth;
+varying vec3 vWorld;
+uniform float uOpening;
 void main() {
   vLocal = position;
   vCrest = aCrest;
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vec4 world = modelMatrix * vec4(position, 1.0);
+  float forwardMask = 1.0 - smoothstep(-70.0, -35.0, world.z);
+  world.x += sign(world.x) * uOpening * 12.0 * exp(-world.x * world.x / 625.0) * forwardMask;
+  vWorld = world.xyz;
+  vec4 mvPosition = viewMatrix * world;
   vFogDepth = -mvPosition.z;
   gl_Position = projectionMatrix * mvPosition;
 }`;
@@ -22,6 +28,8 @@ uniform float uContourOpacity;
 uniform float uPhase;
 uniform float uLayer;
 uniform float uWidth;
+uniform float uOpening;
+varying vec3 vWorld;
 varying vec3 vLocal;
 varying float vCrest;
 #include <fog_pars_fragment>
@@ -38,6 +46,8 @@ float noise2(vec2 p) {
     mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 void main() {
+  float passageWidth = uOpening * (8.5 + 0.5 * sin(vWorld.y * 0.7)) * max(0.0, 1.0 - pow(max(0.0, vWorld.y) / 20.0, 0.8));
+  if (vWorld.z < -40.0 && abs(vWorld.x) < passageWidth) discard;
   float profile = clamp(vLocal.y / max(vCrest, 0.1), 0.0, 1.0);
   // Broad ink washes, not mottled rock noise: texture stays subordinate to shape.
   float wash = 0.5 + 0.5 * sin(vLocal.x * 0.095 + uPhase + profile * 1.8);
@@ -188,6 +198,7 @@ function ridgeMaterial(
         uPhase: { value: seed * 1.713 },
         uLayer: { value: layer },
         uWidth: { value: width },
+        uOpening: { value: 0 },
       },
     ]),
     vertexShader,

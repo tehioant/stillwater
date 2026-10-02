@@ -24,7 +24,8 @@ Open the local URL printed by Vite. Everything is rendered locally; no account, 
 - **Sky:** a rich, gently twinkling star field above the blue-hour mountain horizon (2,400 stars on desktop, 1,200 in touch/low-quality mode).
 - **Touch:** drag to look, arrow controls to glide, and tap nearby objects.
 - **Sound:** optional synthesized quiet water/wind, off until you enable it. Automatically turns off when the tab is hidden.
-- **Motion:** freeze ambient motion. Respects the operating system's reduced-motion preference; intentional navigation remains available.
+- **Mountain passage:** glide straight toward the central mountains. They gradually part as you approach; continue toward the light to be carried through a five-second mist journey into a moonlit forest glade, with a reflective stream and drifting fireflies. Turn back toward the mist arch, or use **Return to pond**, to return. Merely resting nearby or drifting sideways does not trigger travel.
+- **Motion:** freeze ambient motion. Respects the operating system's reduced-motion preference; intentional navigation remains available. Mountain journeys use a short fade with no camera flight in reduced-motion mode; focus loss, a hidden tab, or the guide pauses the journey, and Reset view cancels it in the current world.
 - **Reset view / guide:** in the bottom-right controls.
 
 ## Verify

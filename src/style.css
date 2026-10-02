@@ -397,6 +397,33 @@ dialog b {
   animation: none !important;
   transition: none !important;
 }
+#journey-mist {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: #20383e;
+  opacity: 0;
+  pointer-events: none;
+}
+#passage-hint {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(80%, 500px);
+  text-align: center;
+  color: #e1ece4;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  pointer-events: none;
+  z-index: 5;
+}
+#passage-hint:empty {
+  display: none;
+}
+#return {
+  font-size: 11px;
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

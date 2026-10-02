@@ -1,6 +1,14 @@
 import "./style.css";
 import * as THREE from "three";
 import { createWorld } from "./world";
+import { createForest } from "./forest";
+import {
+  createPassage,
+  advancePassage,
+  beginPassage,
+  cancelPassage,
+  type WorldId,
+} from "./passage";
 import {
   initialNavigation,
   advanceNavigation,
@@ -34,12 +42,15 @@ document.querySelector("#app")!.innerHTML = `
   <footer class="bottom-bar"><span class="footer-note">A moment, just for you.</span><nav aria-label="Pond controls">
    <button id="sound" aria-label="Enable ambient sound" aria-pressed="false" title="Ambient sound">${icons.sound}<span>Sound off</span></button>
    <button id="motion" aria-label="Reduce motion" aria-pressed="false" title="Reduce motion">${icons.motion}<span>Motion</span></button>
+   <button id="return" aria-label="Return to pond" hidden>Return to pond</button>
    <button id="reset" aria-label="Reset view" title="Reset view">${icons.reset}</button>
    <button id="help" aria-label="How to explore" title="How to explore">${icons.help}</button>
   </nav></footer>
   <div id="touch-controls" hidden aria-label="Glide controls"><button data-forward="1" aria-label="Glide forward">↑</button><div><button data-right="-1" aria-label="Glide left">←</button><button data-forward="-1" aria-label="Glide backward">↓</button><button data-right="1" aria-label="Glide right">→</button></div></div>
   <div id="hover-label" aria-hidden="true"></div><p id="notice" role="status" aria-live="polite"></p>
-  <dialog id="guide" aria-labelledby="guide-title"><button id="close-guide" aria-label="Close guide">×</button><span class="eyebrow">TAKE YOUR TIME</span><h2 id="guide-title">A little wayfinding</h2><p><b>Steer with your mouse</b> — no click or hold needed.<br>Move toward the top or bottom to glide forward or back; left or right to turn.<br><b>Rest</b> in the centre to slow to a stop.<br>WASD / arrows and click-drag look also work.<br><b>Click the water</b> to send out a gentle ripple.<br><b>Pause over a lotus</b> nearby to see it unfold.<br><b>Approach a lantern</b> to warm its light.</p><p class="guide-secondary">On touch screens, drag to look, use the arrows to glide, and tap a flower or lantern. Sound is optional. Motion can be paused anytime.</p><button id="continue" class="enter">Back to the pond</button></dialog>
+  <p id="passage-hint" role="status" aria-live="polite"></p>
+  <div id="journey-mist" aria-hidden="true"></div>
+  <dialog id="guide" aria-labelledby="guide-title"><button id="close-guide" aria-label="Close guide">×</button><span class="eyebrow">TAKE YOUR TIME</span><h2 id="guide-title">A little wayfinding</h2><p><b>Steer with your mouse</b> — no click or hold needed.<br>Move toward the top or bottom to glide forward or back; left or right to turn.<br><b>Rest</b> in the centre to slow to a stop.<br>WASD / arrows and click-drag look also work.<br><b>Click the water</b> to send out a gentle ripple.<br><b>Pause over a lotus</b> nearby to see it unfold.<br><b>Approach a lantern</b> to warm its light.<br><b>Continue toward the central mountains</b> to open a passage into the moonlit glade.<br>Turn back toward the mist arch there, or use Return to pond, to return.</p><p class="guide-secondary">On touch screens, drag to look, use the arrows to glide, and tap a flower or lantern. Sound is optional. Motion can be paused anytime.</p><button id="continue" class="enter">Back to the pond</button></dialog>
  </section>`;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -52,12 +63,14 @@ let reducedMotion = mediaMotion.matches;
 let entered = false;
 let soundEnabled = false;
 let active = true;
+let journeyFocused = true;
 let disposed = false;
 let graphicsLost = false;
 const ambience = createAmbience();
 const keys = new Set<string>();
 const touchMovement = { forward: 0, right: 0 };
 const navigation = initialNavigation();
+const passage = createPassage();
 const pointer = new THREE.Vector2(-10, -10);
 const raycaster = new THREE.Raycaster();
 let tappedId: string | null = null;
@@ -126,11 +139,17 @@ $("motion").addEventListener("click", () => {
   syncMotion();
 });
 $("reset").addEventListener("click", () => {
+  cancelPassage(passage);
   Object.assign(navigation, initialNavigation());
   clearMovement();
   pointer.set(-10, -10);
   tappedId = null;
   inform("Back where you began.");
+});
+$("return").addEventListener("click", () => {
+  if (passage.world !== "forest" || passage.phase === "travel") return;
+  clearMovement();
+  beginPassage(passage, navigation, reducedMotion);
 });
 function showGuide() {
   clearMovement();
@@ -167,6 +186,7 @@ window.addEventListener("keydown", (e) => {
   const key = e.key.toLowerCase();
   if (
     !entered ||
+    passage.phase === "travel" ||
     guide.open ||
     (e.target instanceof HTMLElement &&
       e.target.closest("button,a,input,select,textarea"))
@@ -179,6 +199,12 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur", clearMovement);
+window.addEventListener("blur", () => {
+  journeyFocused = false;
+});
+window.addEventListener("focus", () => {
+  journeyFocused = true;
+});
 document.addEventListener("visibilitychange", () => {
   active = !document.hidden && !graphicsLost;
   clearMovement();
@@ -234,8 +260,53 @@ async function initialize() {
     "Explore the pond: mouse direction to steer, centre to rest; WASD or arrow keys to glide, drag to look.",
   );
   container.appendChild(canvas);
-  const world = createWorld(renderer, mediaTouch.matches ? "low" : "high");
-  const { scene, camera, interactive } = world;
+  const quality = mediaTouch.matches ? "low" : "high";
+  let world = createWorld(renderer, quality);
+  let { scene, camera, interactive } = world;
+  const worlds = new Map<WorldId, typeof world>([["pond", world]]);
+  function switchWorld(destination: WorldId) {
+    const next =
+      worlds.get(destination) ??
+      (destination === "forest"
+        ? createForest(renderer, quality)
+        : createWorld(renderer, quality));
+    worlds.set(destination, next);
+    world = next;
+    ({ scene, camera, interactive } = world);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    camera.rotation.order = "YXZ";
+    clearMovement();
+    pointer.set(-10, -10);
+    tappedId = null;
+    $("experience").dataset.world = destination;
+    $("experience").setAttribute(
+      "aria-label",
+      destination === "forest"
+        ? "Interactive moonlit forest glade"
+        : "Interactive blue-hour pond",
+    );
+    canvas.setAttribute(
+      "aria-label",
+      destination === "forest"
+        ? "Explore the glade: mouse direction to steer, WASD or arrow keys to glide, drag to look; turn back toward the mist arch to return."
+        : "Explore the pond: mouse direction to steer, centre to rest; WASD or arrow keys to glide, drag to look.",
+    );
+    $("continue").textContent =
+      destination === "forest" ? "Back to the glade" : "Back to the pond";
+    $("return").hidden = destination !== "forest";
+    document.querySelector(".scene-caption .eyebrow")!.textContent =
+      destination === "forest" ? "THE MOONLIT GLADE" : "THE LOTUS POND";
+    document.querySelector(".scene-caption p")!.textContent =
+      destination === "forest"
+        ? "Follow the stream. Stay with the fireflies."
+        : "Some things open when you come closer.";
+    inform(
+      destination === "forest"
+        ? "A moonlit glade. The passage back lies behind you."
+        : "Back on the still water.",
+    );
+  }
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   camera.rotation.order = "YXZ";
@@ -247,7 +318,7 @@ async function initialize() {
     );
   }
   function hoveredEntity() {
-    if (!entered || guide.open) return undefined;
+    if (!entered || guide.open || passage.phase === "travel") return undefined;
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster
       .intersectObjects(
@@ -267,7 +338,8 @@ async function initialize() {
   const pondPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const waterPoint = new THREE.Vector3();
   canvas.addEventListener("pointerdown", (e) => {
-    if (!entered || guide.open || e.button !== 0) return;
+    if (!entered || guide.open || passage.phase === "travel" || e.button !== 0)
+      return;
     canvas.focus();
     mouseSteering = false;
     updatePointer(e);
@@ -276,6 +348,7 @@ async function initialize() {
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (passage.phase === "travel") return;
     updatePointer(e);
     mouseSteering =
       e.pointerType === "mouse" && e.buttons === 0 && entered && !guide.open;
@@ -370,7 +443,8 @@ async function initialize() {
       Number(keys.has("d") || keys.has("arrowright")) -
       Number(keys.has("a") || keys.has("arrowleft")) +
       touchMovement.right;
-    if (entered && !guide.open) {
+    let travelIntent = 0;
+    if (entered && !guide.open && passage.phase === "idle") {
       const canSteer = mouseSteering && !dragging && keys.size === 0;
       const underMouse = canSteer ? hoveredEntity() : undefined;
       const inspecting =
@@ -390,12 +464,36 @@ async function initialize() {
           ? pointerNavigation(pointer.x, pointer.y)
           : { forward: 0, turn: 0 };
       navigation.yaw -= steering.turn * 0.65 * interactionDt;
+      travelIntent = forward + steering.forward;
       advanceNavigation(
         navigation,
         { forward: forward + steering.forward, right },
         interactionDt,
       );
     }
+    if (entered && !guide.open && journeyFocused) {
+      const wasTravelling = passage.phase === "travel";
+      const result = advancePassage(
+        passage,
+        navigation,
+        travelIntent,
+        interactionDt,
+        reducedMotion,
+      );
+      if (!wasTravelling && passage.phase === "travel") clearMovement();
+      if (result.switchTo) switchWorld(result.switchTo);
+      if (wasTravelling && passage.phase === "idle") clearMovement();
+    }
+    world.setMountainOpening?.(passage.opening);
+    $("journey-mist").style.opacity = String(passage.opacity);
+    $("passage-hint").textContent =
+      passage.phase === "travel"
+        ? "Through the mountains…"
+        : passage.opening > 0.35
+          ? passage.world === "pond"
+            ? "A passage is opening. Continue toward the light."
+            : "The way back to Stillwater."
+          : "";
     camera.position.set(navigation.x, navigation.y, navigation.z);
     camera.rotation.set(navigation.pitch, navigation.yaw, 0);
     scene.updateMatrixWorld();
@@ -457,6 +555,31 @@ async function initialize() {
           elapsed,
           entered,
           soundEnabled,
+          passage: {
+            world: passage.world,
+            phase: passage.phase,
+            opening: passage.opening,
+            opacity: passage.opacity,
+            mountainOpening:
+              (
+                scene.getObjectByName("karst horizon")?.children[0] as
+                  | THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>
+                  | undefined
+              )?.material.uniforms.uOpening.value ?? 0,
+            fireflies:
+              (
+                scene.getObjectByName("fireflies") as THREE.Points | undefined
+              )?.geometry.getAttribute("position").count ?? 0,
+            fireflyTime: (
+              scene.getObjectByName("fireflies") as
+                | THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>
+                | undefined
+            )?.material.uniforms.uTime.value,
+            trees:
+              scene.getObjectByName("irregular old-growth grove")?.children
+                .length ?? 0,
+            stream: !!scene.getObjectByName("stream channel"),
+          },
           drawCalls: renderer.info.render.calls,
           triangles: renderer.info.render.triangles,
           stars: (
@@ -526,7 +649,7 @@ async function initialize() {
     disposed = true;
     cancelAnimationFrame(animationId);
     clearTimeout(noticeTimer);
-    world.dispose();
+    worlds.forEach((loaded) => loaded.dispose());
     renderer.dispose();
     void ambience.dispose();
   });

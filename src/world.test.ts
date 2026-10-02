@@ -114,6 +114,28 @@ describe("createWorld scene contract", () => {
     worlds.forEach((world) => world.dispose());
   });
 
+  it("opens a localized mountain passage without changing the other horizon sectors", () => {
+    const world = createWorld(null as unknown as THREE.WebGLRenderer, "high");
+    const horizon = world.scene.getObjectByName("karst horizon")!;
+    expect(world.setMountainOpening).toBeTypeOf("function");
+    const ridge = horizon.children[0] as THREE.Mesh<
+      THREE.BufferGeometry,
+      THREE.ShaderMaterial
+    >;
+    expect(ridge.material.uniforms.uOpening.value).toBe(0);
+    world.setMountainOpening!(1);
+    expect(ridge.material.uniforms.uOpening.value).toBe(1);
+    expect(ridge.material.vertexShader).toContain("world.x");
+    expect(ridge.material.fragmentShader).toContain("discard");
+    const glow = world.scene.getObjectByName(
+      "mountain passage mist",
+    ) as THREE.Sprite;
+    expect(glow.material.opacity).toBeGreaterThan(0);
+    world.setMountainOpening!(0);
+    expect(glow.material.opacity).toBe(0);
+    world.dispose();
+  });
+
   it("turns only the hovered lantern red and returns to amber on leave", () => {
     const world = createWorld(null as unknown as THREE.WebGLRenderer, "low");
     const [one, two] = world.interactive.filter((e) => e.kind === "lantern");
