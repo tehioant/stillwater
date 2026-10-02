@@ -8,7 +8,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Serial real-WebGL tests on shared software-rendering runners need room
+    # for the expanded mountain journeys, without lowering quality or coverage.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

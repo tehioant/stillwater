@@ -263,6 +263,16 @@ h1 {
   color: #dce2df;
   margin-top: 13px;
 }
+#mountain-walk {
+  pointer-events: auto;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 14px;
+  letter-spacing: 0.03em;
+}
+#mountain-walk::after {
+  padding-left: 10px;
+}
 .hint {
   position: absolute;
   bottom: 86px;

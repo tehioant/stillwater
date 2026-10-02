@@ -2,6 +2,7 @@ import "./style.css";
 import * as THREE from "three";
 import { createWorld } from "./world";
 import { createForest } from "./forest";
+import { advanceMountainWalk } from "./guided-walk";
 import {
   createPassage,
   advancePassage,
@@ -38,7 +39,7 @@ document.querySelector("#app")!.innerHTML = `
    <button id="enter" class="enter" disabled>Preparing the pond…</button>
    <span class="welcome-note">Move gently. Stay a while.</span>
   </section>
-  <div id="after-entry" hidden><div class="scene-caption"><span class="eyebrow">THE LOTUS POND</span><p>Some things open<br>when you come closer.</p></div><p id="hint" class="hint">Mouse to steer <span>·</span> centre to rest <span>·</span> hover to discover</p></div>
+  <div id="after-entry" hidden><div class="scene-caption"><span class="eyebrow">THE LOTUS POND</span><p>Some things open<br>when you come closer.</p><button id="mountain-walk" class="enter" aria-label="Walk to mountains" aria-pressed="false">Walk to mountains</button></div><p id="hint" class="hint">Mouse to steer <span>·</span> centre to rest <span>·</span> hover to discover</p></div>
   <footer class="bottom-bar"><span class="footer-note">A moment, just for you.</span><nav aria-label="Pond controls">
    <button id="sound" aria-label="Enable ambient sound" aria-pressed="false" title="Ambient sound">${icons.sound}<span>Sound off</span></button>
    <button id="motion" aria-label="Reduce motion" aria-pressed="false" title="Reduce motion">${icons.motion}<span>Motion</span></button>
@@ -71,6 +72,15 @@ const keys = new Set<string>();
 const touchMovement = { forward: 0, right: 0 };
 const navigation = initialNavigation();
 const passage = createPassage();
+let walking = false;
+function syncWalk() {
+  const button = $<HTMLButtonElement>("mountain-walk");
+  button.hidden = passage.world !== "pond";
+  button.disabled = passage.phase === "travel";
+  button.textContent = walking ? "Stop walking" : "Walk to mountains";
+  button.setAttribute("aria-label", button.textContent);
+  button.setAttribute("aria-pressed", String(walking));
+}
 const pointer = new THREE.Vector2(-10, -10);
 const raycaster = new THREE.Raycaster();
 let tappedId: string | null = null;
@@ -106,6 +116,8 @@ mediaMotion.addEventListener("change", (e) => {
   syncMotion();
 });
 function clearMovement() {
+  walking = false;
+  syncWalk();
   pendingWaterClick = null;
   mouseSteering = false;
   keys.clear();
@@ -145,6 +157,17 @@ $("reset").addEventListener("click", () => {
   pointer.set(-10, -10);
   tappedId = null;
   inform("Back where you began.");
+});
+$("mountain-walk").addEventListener("click", () => {
+  if (!entered || passage.world !== "pond" || passage.phase !== "idle") return;
+  const startWalking = !walking;
+  clearMovement();
+  pointer.set(-10, -10);
+  if (startWalking) {
+    if (reducedMotion) beginPassage(passage, navigation, true);
+    else walking = true;
+  }
+  syncWalk();
 });
 $("return").addEventListener("click", () => {
   if (passage.world !== "forest" || passage.phase === "travel") return;
@@ -194,6 +217,7 @@ window.addEventListener("keydown", (e) => {
     return;
   if (movementKeys.includes(key)) {
     e.preventDefault();
+    if (walking) clearMovement();
     keys.add(key);
   }
 });
@@ -218,6 +242,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>(
   "#touch-controls button",
 )) {
   const set = (value: number) => {
+    if (value && walking) clearMovement();
     if (button.dataset.forward)
       touchMovement.forward = Number(button.dataset.forward) * value;
     else touchMovement.right = Number(button.dataset.right) * value;
@@ -340,6 +365,7 @@ async function initialize() {
   canvas.addEventListener("pointerdown", (e) => {
     if (!entered || guide.open || passage.phase === "travel" || e.button !== 0)
       return;
+    if (walking) clearMovement();
     canvas.focus();
     mouseSteering = false;
     updatePointer(e);
@@ -349,6 +375,8 @@ async function initialize() {
   });
   canvas.addEventListener("pointermove", (e) => {
     if (passage.phase === "travel") return;
+    if (walking && e.pointerType === "mouse" && e.buttons === 0)
+      clearMovement();
     updatePointer(e);
     mouseSteering =
       e.pointerType === "mouse" && e.buttons === 0 && entered && !guide.open;
@@ -444,7 +472,20 @@ async function initialize() {
       Number(keys.has("a") || keys.has("arrowleft")) +
       touchMovement.right;
     let travelIntent = 0;
-    if (entered && !guide.open && passage.phase === "idle") {
+    if (walking && reducedMotion) {
+      beginPassage(passage, navigation, true);
+      clearMovement();
+    }
+    if (
+      walking &&
+      entered &&
+      !guide.open &&
+      journeyFocused &&
+      passage.phase === "idle"
+    ) {
+      advanceMountainWalk(navigation, interactionDt);
+      travelIntent = 1;
+    } else if (entered && !guide.open && passage.phase === "idle") {
       const canSteer = mouseSteering && !dragging && keys.size === 0;
       const underMouse = canSteer ? hoveredEntity() : undefined;
       const inspecting =
@@ -485,6 +526,7 @@ async function initialize() {
       if (wasTravelling && passage.phase === "idle") clearMovement();
     }
     world.setMountainOpening?.(passage.opening);
+    syncWalk();
     $("journey-mist").style.opacity = String(passage.opacity);
     $("passage-hint").textContent =
       passage.phase === "travel"
