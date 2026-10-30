@@ -13,7 +13,7 @@
     "check": "npm run format:check && npm run test && npm run build"
   },
   "dependencies": {
-    "three": "^0.183.0"
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
